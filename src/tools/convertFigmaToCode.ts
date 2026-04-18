@@ -2,6 +2,8 @@ import { z } from "zod";
 import { parseFigmaUrl } from "../figma/url.js";
 import { getFile, getNode } from "../figma/client.js";
 import { generateHtml } from "../generators/html.js";
+import { generateReact } from "../generators/react.js";
+import { toPascalCase } from "../utils/naming.js";
 
 export const ConvertFigmaToCodeSchema = {
   figmaUrl: z.string().url().describe("Figma file or design URL"),
@@ -25,9 +27,9 @@ export async function handleConvertFigmaToCode({
   framework,
   styling,
 }: ConvertFigmaToCodeInput) {
-  if (framework !== "html") {
+  if (framework !== "html" && framework !== "react") {
     throw new Error(
-      `Not implemented: framework="${framework}". Only "html" is supported right now.`,
+      `Not implemented: framework="${framework}". Supported: "html", "react".`,
     );
   }
 
@@ -37,11 +39,21 @@ export async function handleConvertFigmaToCode({
     ? await getNode(fileKey, nodeId)
     : (await getFile(fileKey)).document;
 
-  const result = await generateHtml(rootNode, styling);
+  let files: OutputFile[];
 
-  const files: OutputFile[] = [{ path: "index.html", contents: result.html }];
-  if (result.css) {
-    files.push({ path: "styles.css", contents: result.css });
+  if (framework === "react") {
+    const componentName = toPascalCase(rootNode.name) || "Component";
+    const result = await generateReact(rootNode, styling);
+    files = [{ path: `${componentName}.tsx`, contents: result.tsx }];
+    if (result.css) {
+      files.push({ path: `${componentName}.module.css`, contents: result.css });
+    }
+  } else {
+    const result = await generateHtml(rootNode, styling);
+    files = [{ path: "index.html", contents: result.html }];
+    if (result.css) {
+      files.push({ path: "styles.css", contents: result.css });
+    }
   }
 
   const summary = files
