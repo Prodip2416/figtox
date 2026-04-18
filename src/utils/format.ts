@@ -11,3 +11,7 @@ export async function formatCss(code: string): Promise<string> {
 export async function formatTsx(code: string): Promise<string> {
   return prettier.format(code, { parser: "typescript", printWidth: 100 });
 }
+
+export async function formatVue(code: string): Promise<string> {
+  return prettier.format(code, { parser: "vue", printWidth: 100 });
+}

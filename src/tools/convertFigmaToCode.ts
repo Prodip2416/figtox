@@ -3,6 +3,7 @@ import { parseFigmaUrl } from "../figma/url.js";
 import { getFile, getNode } from "../figma/client.js";
 import { generateHtml } from "../generators/html.js";
 import { generateReact } from "../generators/react.js";
+import { generateVue } from "../generators/vue.js";
 import { toPascalCase } from "../utils/naming.js";
 
 export const ConvertFigmaToCodeSchema = {
@@ -27,9 +28,9 @@ export async function handleConvertFigmaToCode({
   framework,
   styling,
 }: ConvertFigmaToCodeInput) {
-  if (framework !== "html" && framework !== "react") {
+  if (framework !== "html" && framework !== "react" && framework !== "vue") {
     throw new Error(
-      `Not implemented: framework="${framework}". Supported: "html", "react".`,
+      `Not implemented: framework="${framework}". Supported: "html", "react", "vue".`,
     );
   }
 
@@ -48,6 +49,10 @@ export async function handleConvertFigmaToCode({
     if (result.css) {
       files.push({ path: `${componentName}.module.css`, contents: result.css });
     }
+  } else if (framework === "vue") {
+    const componentName = toPascalCase(rootNode.name) || "Component";
+    const result = await generateVue(rootNode, styling);
+    files = [{ path: `${componentName}.vue`, contents: result.vue }];
   } else {
     const result = await generateHtml(rootNode, styling);
     files = [{ path: "index.html", contents: result.html }];
