@@ -1,11 +1,10 @@
-import type { FigmaNode } from "../figma/types.js";
-import { extractCss } from "../extractors/css.js";
+import type { FigmaNode, FigmaBoundingBox } from "../figma/types.js";
+import { extractCss, type StyleObject } from "../extractors/css.js";
 import { generateCssFile } from "./css.js";
 import { styleObjectToTailwindClasses } from "./tailwind.js";
-import { toBemBlock, toBemElement } from "../utils/naming.js";
-import { toPascalCase } from "../utils/naming.js";
+import { toBemBlock, toBemElement, toPascalCase, deduplicateChildNames } from "../utils/naming.js";
 import { formatTsx, formatCss } from "../utils/format.js";
-import type { StyleObject } from "../extractors/css.js";
+import { escapeJsx } from "../utils/escape.js";
 
 export type Styling = "css" | "tailwind";
 
@@ -30,32 +29,46 @@ function walkCss(
   node: FigmaNode,
   blockClass: string,
   depth: number,
+  nodeName: string,
   rules: Rule[],
+  parentBbox?: FigmaBoundingBox,
+  parentHasLayout?: boolean,
 ): string {
   if (node.visible === false) return "";
 
-  const cls = depth === 0 ? blockClass : toBemElement(blockClass, node.name);
-  rules.push({ selector: cls, style: extractCss(node) });
+  const cls = depth === 0 ? blockClass : toBemElement(blockClass, nodeName);
+  rules.push({ selector: cls, style: extractCss(node, { parentBbox, inAbsoluteLayout: depth > 0 && !parentHasLayout }) });
 
   const tag = nodeToJsxTag(node);
-  const text = node.type === "TEXT" && node.characters ? node.characters : "";
+  const text = node.type === "TEXT" && node.characters ? escapeJsx(node.characters) : "";
+  const hasLayout = !!(node.layoutMode && node.layoutMode !== "NONE");
+  const children = node.children ?? [];
+  const childNames = deduplicateChildNames(children.map((c) => c.name));
+
   const inner =
     text ||
-    (node.children ?? [])
-      .map((c) => walkCss(c, blockClass, depth + 1, rules))
+    children
+      .map((c, i) => walkCss(c, blockClass, depth + 1, childNames[i], rules, node.absoluteBoundingBox, hasLayout))
       .join("\n");
 
-  if (!inner) return `<${tag} className={styles.${cls.replace(/-/g, "_")}} />`;
-  return `<${tag} className={styles.${cls.replace(/-/g, "_")}}>${inner}</${tag}>`;
+  const ref = `styles.${cls.replace(/-/g, "_")}`;
+  if (!inner) return `<${tag} className={${ref}} />`;
+  return `<${tag} className={${ref}}>${inner}</${tag}>`;
 }
 
-function walkTailwind(node: FigmaNode): string {
+function walkTailwind(
+  node: FigmaNode,
+  parentBbox?: FigmaBoundingBox,
+  parentHasLayout?: boolean,
+): string {
   if (node.visible === false) return "";
 
-  const classes = styleObjectToTailwindClasses(extractCss(node));
+  const classes = styleObjectToTailwindClasses(extractCss(node, { parentBbox, inAbsoluteLayout: !!parentBbox && !parentHasLayout }));
   const tag = nodeToJsxTag(node);
-  const text = node.type === "TEXT" && node.characters ? node.characters : "";
-  const inner = text || (node.children ?? []).map(walkTailwind).join("\n");
+  const text = node.type === "TEXT" && node.characters ? escapeJsx(node.characters) : "";
+  const hasLayout = !!(node.layoutMode && node.layoutMode !== "NONE");
+
+  const inner = text || (node.children ?? []).map((c) => walkTailwind(c, node.absoluteBoundingBox, hasLayout)).join("\n");
 
   if (!inner) return `<${tag} className="${classes}" />`;
   return `<${tag} className="${classes}">${inner}</${tag}>`;
@@ -70,9 +83,7 @@ export async function generateReact(
   if (styling === "tailwind") {
     const jsxBody = walkTailwind(node);
     const raw = `
-interface ${componentName}Props {
-  className?: string;
-}
+interface ${componentName}Props { className?: string; }
 
 export function ${componentName}({ className }: ${componentName}Props) {
   return (
@@ -87,15 +98,13 @@ export function ${componentName}({ className }: ${componentName}Props) {
 
   const blockClass = toBemBlock(node.name);
   const rules: Rule[] = [];
-  const jsxBody = walkCss(node, blockClass, 0, rules);
+  const jsxBody = walkCss(node, blockClass, 0, node.name, rules);
   const rawCss = generateCssFile(rules);
 
   const raw = `
 import styles from './${componentName}.module.css';
 
-interface ${componentName}Props {
-  className?: string;
-}
+interface ${componentName}Props { className?: string; }
 
 export function ${componentName}({ className }: ${componentName}Props) {
   return (

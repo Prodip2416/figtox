@@ -4,6 +4,8 @@ import { getFile, getNode } from "../figma/client.js";
 import { generateHtml } from "../generators/html.js";
 import { generateReact } from "../generators/react.js";
 import { generateVue } from "../generators/vue.js";
+import { generateAngular } from "../generators/angular.js";
+import { generateSvelte } from "../generators/svelte.js";
 import { toPascalCase } from "../utils/naming.js";
 
 export const ConvertFigmaToCodeSchema = {
@@ -28,11 +30,6 @@ export async function handleConvertFigmaToCode({
   framework,
   styling,
 }: ConvertFigmaToCodeInput) {
-  if (framework !== "html" && framework !== "react" && framework !== "vue") {
-    throw new Error(
-      `Not implemented: framework="${framework}". Supported: "html", "react", "vue".`,
-    );
-  }
 
   const { fileKey, nodeId } = parseFigmaUrl(figmaUrl);
 
@@ -53,6 +50,23 @@ export async function handleConvertFigmaToCode({
     const componentName = toPascalCase(rootNode.name) || "Component";
     const result = await generateVue(rootNode, styling);
     files = [{ path: `${componentName}.vue`, contents: result.vue }];
+  } else if (framework === "angular") {
+    const componentName = toPascalCase(rootNode.name) || "Component";
+    const fileName = `${componentName}.component`;
+    const result = await generateAngular(rootNode, styling);
+    if (styling === "tailwind") {
+      files = [{ path: `${fileName}.ts`, contents: result.ts }];
+    } else {
+      files = [
+        { path: `${fileName}.ts`, contents: result.ts },
+        { path: `${fileName}.html`, contents: result.html },
+        { path: `${fileName}.css`, contents: result.css! },
+      ];
+    }
+  } else if (framework === "svelte") {
+    const componentName = toPascalCase(rootNode.name) || "Component";
+    const result = await generateSvelte(rootNode, styling);
+    files = [{ path: `${componentName}.svelte`, contents: result.svelte }];
   } else {
     const result = await generateHtml(rootNode, styling);
     files = [{ path: "index.html", contents: result.html }];

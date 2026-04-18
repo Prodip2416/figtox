@@ -90,10 +90,18 @@ export interface FigmaNode {
   counterAxisAlignItems?: "MIN" | "CENTER" | "MAX" | "BASELINE";
 }
 
+export interface FigmaStyleMeta {
+  key: string;
+  name: string;
+  styleType: "FILL" | "TEXT" | "EFFECT" | "GRID";
+  description?: string;
+}
+
 export interface FigmaFile {
   name: string;
   document: FigmaNode;
   schemaVersion: number;
+  styles?: Record<string, FigmaStyleMeta>;
 }
 
 export interface FigmaNodesResponse {

@@ -1,6 +1,9 @@
 import type { StyleObject } from "../extractors/css.js";
 
 const STYLE_PROP_MAP: Record<keyof StyleObject, string> = {
+  position: "position",
+  top: "top",
+  left: "left",
   width: "width",
   height: "height",
   backgroundColor: "background-color",
@@ -30,6 +33,8 @@ const STYLE_PROP_MAP: Record<keyof StyleObject, string> = {
   paddingLeft: "padding-left",
 };
 
+const CSS_RESET = `*, *::before, *::after {\n  box-sizing: border-box;\n}`;
+
 export function styleObjectToCssDeclarations(style: StyleObject): string {
   return (Object.entries(style) as [keyof StyleObject, string][])
     .filter(([, v]) => v !== undefined)
@@ -40,8 +45,9 @@ export function styleObjectToCssDeclarations(style: StyleObject): string {
 export function generateCssFile(
   rules: { selector: string; style: StyleObject }[],
 ): string {
-  return rules
+  const body = rules
     .filter((r) => Object.keys(r.style).length > 0)
     .map((r) => `.${r.selector} {\n${styleObjectToCssDeclarations(r.style)}\n}`)
     .join("\n\n");
+  return body ? `${CSS_RESET}\n\n${body}` : CSS_RESET;
 }

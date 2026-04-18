@@ -27,11 +27,19 @@ const ALIGN_MAP: Record<string, string> = {
 };
 
 function arb(value: string): string {
-  return `[${value.replace(/\s/g, "_")}]`;
+  const rounded = value.replace(/(\d+\.\d+)px/g, (_, n) => `${Math.round(parseFloat(n))}px`);
+  return `[${rounded.replace(/\s/g, "_")}]`;
 }
+
+
 
 export function styleObjectToTailwindClasses(style: StyleObject): string {
   const classes: string[] = [];
+
+  if (style.position === "absolute") classes.push("absolute");
+  else if (style.position === "relative") classes.push("relative");
+  if (style.top) classes.push(`top-${arb(style.top)}`);
+  if (style.left) classes.push(`left-${arb(style.left)}`);
 
   if (style.width) classes.push(`w-${arb(style.width)}`);
   if (style.height) classes.push(`h-${arb(style.height)}`);

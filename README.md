@@ -56,11 +56,6 @@ Parse a Figma URL into `fileKey` and `nodeId`.
 { "url": "https://www.figma.com/design/ABC123/Name?node-id=1-2" }
 ```
 
-**Output:**
-```json
-{ "fileKey": "ABC123", "nodeId": "1:2" }
-```
-
 ### `get_component_structure`
 Fetch a Figma node and return its component hierarchy.
 
@@ -69,32 +64,74 @@ Fetch a Figma node and return its component hierarchy.
 { "figmaUrl": "https://www.figma.com/design/ABC123/Name?node-id=1-2" }
 ```
 
-**Output:**
+### `convert_figma_to_code`
+Convert a Figma design into production-ready code.
+
+**Input:**
 ```json
 {
-  "id": "1:2",
-  "name": "Frame",
-  "type": "FRAME",
-  "children": [
-    { "id": "1:3", "name": "Button", "type": "COMPONENT" }
-  ]
+  "figmaUrl": "https://www.figma.com/design/ABC123/Name?node-id=1-2",
+  "framework": "react",
+  "styling": "tailwind"
 }
 ```
+
+- `framework`: `"html"` | `"react"` | `"vue"` | `"angular"` | `"svelte"`
+- `styling`: `"css"` | `"tailwind"`
+
+**Output files by framework:**
+
+| Framework | CSS | Tailwind |
+|-----------|-----|---------|
+| html | `index.html` + `styles.css` | `index.html` |
+| react | `Component.tsx` + `Component.module.css` | `Component.tsx` |
+| vue | `Component.vue` (with `<style module>`) | `Component.vue` |
+| angular | `Component.component.ts/html/css` | `Component.component.ts` (inline template) |
+| svelte | `Component.svelte` (with `<style>`) | `Component.svelte` |
+
+### `extract_design_tokens`
+Extract colors, typography, and spacing tokens from a Figma file.
+
+**Input:**
+```json
+{
+  "figmaUrl": "https://www.figma.com/design/ABC123/Name",
+  "format": "css"
+}
+```
+
+- `format`: `"css"` → `:root { --color-...: ... }` | `"tailwind"` → `tailwind.config.js` snippet
 
 ## Project Structure
 
 ```
 src/
-├── index.ts                      # Entry point, stdio transport
-├── server.ts                     # MCP server + tool registration
+├── index.ts
+├── server.ts
 ├── figma/
-│   ├── client.ts                 # Figma REST API (getFile, getNode)
-│   ├── url.ts                    # Figma URL parser
-│   └── types.ts                  # Figma node types
+│   ├── client.ts          # REST API with in-memory cache
+│   ├── url.ts             # URL parser
+│   └── types.ts           # Figma node types
 ├── extractors/
-│   └── structure.ts              # Node tree → component hierarchy
-└── tools/
-    └── getComponentStructure.ts  # get_component_structure handler
+│   ├── css.ts             # Node → StyleObject
+│   ├── structure.ts       # Node tree → component hierarchy
+│   └── tokens.ts          # File → design tokens
+├── generators/
+│   ├── html.ts            # HTML5 + BEM
+│   ├── react.ts           # React functional component + TS props
+│   ├── vue.ts             # Vue 3 <script setup>
+│   ├── angular.ts         # Angular standalone component
+│   ├── svelte.ts          # Svelte SFC
+│   ├── css.ts             # StyleObject → CSS declarations
+│   └── tailwind.ts        # StyleObject → Tailwind classes
+├── tools/
+│   ├── convertFigmaToCode.ts
+│   ├── extractDesignTokens.ts
+│   └── getComponentStructure.ts
+└── utils/
+    ├── color.ts           # RGBA → hex/rgba
+    ├── format.ts          # Prettier wrappers
+    └── naming.ts          # BEM / PascalCase / kebab helpers
 ```
 
 ## Status
@@ -104,10 +141,15 @@ src/
 | 1 | ✅ | Project scaffold |
 | 2 | ✅ | Minimal MCP server (stdio) |
 | 3 | ✅ | Figma URL parser |
-| 4 | ✅ | Figma REST client |
+| 4 | ✅ | Figma REST client + in-memory cache |
+| 5 | ✅ | CSS extractor |
+| 6 | ✅ | HTML + raw CSS generator |
 | 7 | ✅ | `get_component_structure` tool |
-| 5–6 | ⏳ | CSS extractor + HTML/CSS generator |
-| 8 | ⏳ | `convert_figma_to_code` (HTML/CSS) |
-| 9–13 | ⏳ | Tailwind, React, Vue, Angular, Svelte |
-| 14 | ⏳ | `extract_design_tokens` |
-| 15 | ⏳ | Polish |
+| 8 | ✅ | `convert_figma_to_code` (HTML/CSS) |
+| 9 | ✅ | Tailwind styling |
+| 10 | ✅ | React generator |
+| 11 | ✅ | Vue 3 generator |
+| 12 | ✅ | Angular standalone generator |
+| 13 | ✅ | Svelte generator |
+| 14 | ✅ | `extract_design_tokens` |
+| 15 | ✅ | Polish |

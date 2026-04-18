@@ -8,6 +8,10 @@ import {
   ConvertFigmaToCodeSchema,
   handleConvertFigmaToCode,
 } from "./tools/convertFigmaToCode.js";
+import {
+  ExtractDesignTokensSchema,
+  handleExtractDesignTokens,
+} from "./tools/extractDesignTokens.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -62,10 +66,21 @@ export function createServer(): McpServer {
     {
       title: "Convert Figma to Code",
       description:
-        "Convert a Figma design into production-ready HTML + CSS (more frameworks coming soon).",
+        "Convert a Figma design into production-ready code. Supports HTML, React, Vue, Angular, Svelte with CSS or Tailwind.",
       inputSchema: ConvertFigmaToCodeSchema,
     },
     handleConvertFigmaToCode,
+  );
+
+  server.registerTool(
+    "extract_design_tokens",
+    {
+      title: "Extract Design Tokens",
+      description:
+        "Extract colors, typography, and spacing from a Figma file as CSS custom properties or a Tailwind config snippet.",
+      inputSchema: ExtractDesignTokensSchema,
+    },
+    handleExtractDesignTokens,
   );
 
   return server;

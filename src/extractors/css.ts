@@ -1,7 +1,10 @@
-import type { FigmaNode, FigmaPaint } from "../figma/types.js";
+import type { FigmaNode, FigmaPaint, FigmaBoundingBox } from "../figma/types.js";
 import { figmaColorToHex, figmaColorToRgba } from "../utils/color.js";
 
 export interface StyleObject {
+  position?: string;
+  top?: string;
+  left?: string;
   width?: string;
   height?: string;
   backgroundColor?: string;
@@ -31,6 +34,15 @@ export interface StyleObject {
   paddingLeft?: string;
 }
 
+export interface ExtractCssOptions {
+  parentBbox?: FigmaBoundingBox;
+  inAbsoluteLayout?: boolean;
+}
+
+function px(n: number): string {
+  return `${Math.round(n)}px`;
+}
+
 function firstVisibleSolid(paints?: FigmaPaint[]): string | undefined {
   if (!paints) return undefined;
   for (const p of paints) {
@@ -45,44 +57,46 @@ function firstVisibleSolid(paints?: FigmaPaint[]): string | undefined {
 
 function mapJustifyContent(value?: string): string | undefined {
   switch (value) {
-    case "MIN":
-      return "flex-start";
-    case "CENTER":
-      return "center";
-    case "MAX":
-      return "flex-end";
-    case "SPACE_BETWEEN":
-      return "space-between";
-    default:
-      return undefined;
+    case "MIN": return "flex-start";
+    case "CENTER": return "center";
+    case "MAX": return "flex-end";
+    case "SPACE_BETWEEN": return "space-between";
+    default: return undefined;
   }
 }
 
 function mapAlignItems(value?: string): string | undefined {
   switch (value) {
-    case "MIN":
-      return "flex-start";
-    case "CENTER":
-      return "center";
-    case "MAX":
-      return "flex-end";
-    case "BASELINE":
-      return "baseline";
-    default:
-      return undefined;
+    case "MIN": return "flex-start";
+    case "CENTER": return "center";
+    case "MAX": return "flex-end";
+    case "BASELINE": return "baseline";
+    default: return undefined;
   }
 }
 
-export function extractCss(node: FigmaNode): StyleObject {
+export function extractCss(node: FigmaNode, opts: ExtractCssOptions = {}): StyleObject {
   const style: StyleObject = {};
+  const bbox = node.absoluteBoundingBox;
 
-  if (node.absoluteBoundingBox) {
-    style.width = `${node.absoluteBoundingBox.width}px`;
-    style.height = `${node.absoluteBoundingBox.height}px`;
+  if (bbox) {
+    style.width = px(bbox.width);
+    style.height = px(bbox.height);
+
+    if (opts.inAbsoluteLayout && opts.parentBbox) {
+      style.position = "absolute";
+      style.top = px(bbox.y - opts.parentBbox.y);
+      style.left = px(bbox.x - opts.parentBbox.x);
+    }
+  }
+
+  const hasLayout = node.layoutMode && node.layoutMode !== "NONE";
+  const hasChildren = (node.children ?? []).length > 0;
+  if (!hasLayout && hasChildren && !opts.inAbsoluteLayout) {
+    style.position = "relative";
   }
 
   const isText = node.type === "TEXT";
-
   if (isText) {
     const textColor = firstVisibleSolid(node.fills);
     if (textColor) style.color = textColor;
@@ -96,25 +110,23 @@ export function extractCss(node: FigmaNode): StyleObject {
     if (borderColor) {
       style.borderColor = borderColor;
       style.borderStyle = "solid";
-      if (node.strokeWeight) {
-        style.borderWidth = `${node.strokeWeight}px`;
-      }
+      if (node.strokeWeight) style.borderWidth = px(node.strokeWeight);
     }
   }
 
   if (node.rectangleCornerRadii) {
     const [tl, tr, br, bl] = node.rectangleCornerRadii;
-    style.borderRadius = `${tl}px ${tr}px ${br}px ${bl}px`;
+    style.borderRadius = `${px(tl)} ${px(tr)} ${px(br)} ${px(bl)}`;
   } else if (node.cornerRadius !== undefined && node.cornerRadius > 0) {
-    style.borderRadius = `${node.cornerRadius}px`;
+    style.borderRadius = px(node.cornerRadius);
   }
 
   if (node.style) {
     const t = node.style;
     if (t.fontFamily) style.fontFamily = `'${t.fontFamily}', sans-serif`;
-    if (t.fontSize) style.fontSize = `${t.fontSize}px`;
+    if (t.fontSize) style.fontSize = px(t.fontSize);
     if (t.fontWeight) style.fontWeight = String(t.fontWeight);
-    if (t.lineHeightPx) style.lineHeight = `${t.lineHeightPx}px`;
+    if (t.lineHeightPx) style.lineHeight = px(t.lineHeightPx);
     if (t.letterSpacing) style.letterSpacing = `${t.letterSpacing}px`;
     if (t.textAlignHorizontal) {
       style.textAlign = t.textAlignHorizontal.toLowerCase().replace("justified", "justify");
@@ -133,31 +145,27 @@ export function extractCss(node: FigmaNode): StyleObject {
     const shadows = node.effects
       .filter((e) => e.visible !== false && e.type === "DROP_SHADOW" && e.color)
       .map((e) => {
-        const x = e.offset?.x ?? 0;
-        const y = e.offset?.y ?? 0;
-        const blur = e.radius ?? 0;
-        const spread = e.spread ?? 0;
-        const color = figmaColorToRgba(e.color!);
-        return `${x}px ${y}px ${blur}px ${spread}px ${color}`;
+        const x = Math.round(e.offset?.x ?? 0);
+        const y = Math.round(e.offset?.y ?? 0);
+        const blur = Math.round(e.radius ?? 0);
+        const spread = Math.round(e.spread ?? 0);
+        return `${x}px ${y}px ${blur}px ${spread}px ${figmaColorToRgba(e.color!)}`;
       });
     if (shadows.length > 0) style.boxShadow = shadows.join(", ");
   }
 
-  if (node.layoutMode && node.layoutMode !== "NONE") {
+  if (hasLayout) {
     style.display = "flex";
     style.flexDirection = node.layoutMode === "HORIZONTAL" ? "row" : "column";
-
     const justify = mapJustifyContent(node.primaryAxisAlignItems);
     if (justify) style.justifyContent = justify;
-
     const align = mapAlignItems(node.counterAxisAlignItems);
     if (align) style.alignItems = align;
-
-    if (node.itemSpacing) style.gap = `${node.itemSpacing}px`;
-    if (node.paddingTop) style.paddingTop = `${node.paddingTop}px`;
-    if (node.paddingRight) style.paddingRight = `${node.paddingRight}px`;
-    if (node.paddingBottom) style.paddingBottom = `${node.paddingBottom}px`;
-    if (node.paddingLeft) style.paddingLeft = `${node.paddingLeft}px`;
+    if (node.itemSpacing) style.gap = px(node.itemSpacing);
+    if (node.paddingTop) style.paddingTop = px(node.paddingTop);
+    if (node.paddingRight) style.paddingRight = px(node.paddingRight);
+    if (node.paddingBottom) style.paddingBottom = px(node.paddingBottom);
+    if (node.paddingLeft) style.paddingLeft = px(node.paddingLeft);
   }
 
   return style;
