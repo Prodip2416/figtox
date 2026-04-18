@@ -1,8 +1,11 @@
 import type { FigmaNode } from "../figma/types.js";
 import { extractCss, type StyleObject } from "../extractors/css.js";
 import { generateCssFile } from "./css.js";
+import { styleObjectToTailwindClasses } from "./tailwind.js";
 import { toBemBlock, toBemElement } from "../utils/naming.js";
 import { formatHtml, formatCss } from "../utils/format.js";
+
+export type Styling = "css" | "tailwind";
 
 interface Rule {
   selector: string;
@@ -21,7 +24,7 @@ function nodeToTag(node: FigmaNode): string {
   return "div";
 }
 
-function walkNode(
+function walkNodeCss(
   node: FigmaNode,
   blockClass: string,
   depth: number,
@@ -29,41 +32,50 @@ function walkNode(
 ): string {
   if (node.visible === false) return "";
 
-  const isRoot = depth === 0;
-  const className = isRoot
-    ? blockClass
-    : toBemElement(blockClass, node.name);
-
+  const className = depth === 0 ? blockClass : toBemElement(blockClass, node.name);
   const style = extractCss(node);
   rules.push({ selector: className, style });
 
   const tag = nodeToTag(node);
-  const content =
-    node.type === "TEXT" && node.characters ? node.characters : "";
-
-  const children = node.children ?? [];
+  const content = node.type === "TEXT" && node.characters ? node.characters : "";
   const inner =
     content ||
-    children
-      .map((child) => walkNode(child, blockClass, depth + 1, rules))
+    (node.children ?? [])
+      .map((child) => walkNodeCss(child, blockClass, depth + 1, rules))
       .join("\n");
 
   return `<${tag} class="${className}">${inner}</${tag}>`;
 }
 
+function walkNodeTailwind(node: FigmaNode): string {
+  if (node.visible === false) return "";
+
+  const style = extractCss(node);
+  const classes = styleObjectToTailwindClasses(style);
+  const tag = nodeToTag(node);
+  const content = node.type === "TEXT" && node.characters ? node.characters : "";
+  const inner =
+    content ||
+    (node.children ?? []).map(walkNodeTailwind).join("\n");
+
+  return `<${tag} class="${classes}">${inner}</${tag}>`;
+}
+
 export async function generateHtml(
   node: FigmaNode,
-): Promise<{ html: string; css: string }> {
+  styling: Styling = "css",
+): Promise<{ html: string; css?: string }> {
+  if (styling === "tailwind") {
+    const rawHtml = walkNodeTailwind(node);
+    const html = await formatHtml(rawHtml);
+    return { html };
+  }
+
   const blockClass = toBemBlock(node.name);
   const rules: Rule[] = [];
-
-  const rawHtml = walkNode(node, blockClass, 0, rules);
+  const rawHtml = walkNodeCss(node, blockClass, 0, rules);
   const rawCss = generateCssFile(rules);
 
-  const [html, css] = await Promise.all([
-    formatHtml(rawHtml),
-    formatCss(rawCss),
-  ]);
-
+  const [html, css] = await Promise.all([formatHtml(rawHtml), formatCss(rawCss)]);
   return { html, css };
 }

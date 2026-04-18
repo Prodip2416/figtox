@@ -25,9 +25,9 @@ export async function handleConvertFigmaToCode({
   framework,
   styling,
 }: ConvertFigmaToCodeInput) {
-  if (framework !== "html" || styling !== "css") {
+  if (framework !== "html") {
     throw new Error(
-      `Not implemented: framework="${framework}" styling="${styling}". Only html + css is supported right now.`,
+      `Not implemented: framework="${framework}". Only "html" is supported right now.`,
     );
   }
 
@@ -37,12 +37,12 @@ export async function handleConvertFigmaToCode({
     ? await getNode(fileKey, nodeId)
     : (await getFile(fileKey)).document;
 
-  const { html, css } = await generateHtml(rootNode);
+  const result = await generateHtml(rootNode, styling);
 
-  const files: OutputFile[] = [
-    { path: "index.html", contents: html },
-    { path: "styles.css", contents: css },
-  ];
+  const files: OutputFile[] = [{ path: "index.html", contents: result.html }];
+  if (result.css) {
+    files.push({ path: "styles.css", contents: result.css });
+  }
 
   const summary = files
     .map((f) => `### ${f.path}\n\`\`\`\n${f.contents}\n\`\`\``)
