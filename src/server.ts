@@ -4,6 +4,10 @@ import {
   GetComponentStructureSchema,
   handleGetComponentStructure,
 } from "./tools/getComponentStructure.js";
+import {
+  ConvertFigmaToCodeSchema,
+  handleConvertFigmaToCode,
+} from "./tools/convertFigmaToCode.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -51,6 +55,17 @@ export function createServer(): McpServer {
       inputSchema: GetComponentStructureSchema,
     },
     handleGetComponentStructure,
+  );
+
+  server.registerTool(
+    "convert_figma_to_code",
+    {
+      title: "Convert Figma to Code",
+      description:
+        "Convert a Figma design into production-ready HTML + CSS (more frameworks coming soon).",
+      inputSchema: ConvertFigmaToCodeSchema,
+    },
+    handleConvertFigmaToCode,
   );
 
   return server;
